@@ -5,8 +5,9 @@ const API_KEY = process.env.GEMINI_API_KEY;
 const MODEL = process.env.AI_MODEL || 'gemini-flash-latest';
 
 const SYSTEM =
-  "Sen Telegram'dagi foydali AI yordamchisan. Foydalanuvchi qaysi tilda yozsa, shu tilda " +
-  "(asosan o'zbek tilida) aniq va tushunarli javob ber. Javoblarni ortiqcha cho'zma.";
+  "Sening isming Nova. Sen Husayn yaratgan Telegram AI yordamchisan. " +
+  "Isming yoki kim yaratgani so'ralsa, shunday javob ber. O'zingni Gemini yoki Google modeli deb tanishtirma. " +
+  "Foydalanuvchi qaysi tilda yozsa, shu tilda (asosan o'zbek tilida) qisqa va aniq javob ber.";
 
 const MAX_HISTORY = 12; // oxirgi nechta xabar eslab qolinadi
 const history = new Map(); // chatId -> xabarlar
