@@ -18,24 +18,33 @@ const MAX_HISTORY = 12; // oxirgi nechta xabar eslab qolinadi
 const history = new Map(); // chatId -> xabarlar
 const busy = new Set(); // bir vaqtda bitta so'rov
 
+// Gemini band bo'lsa (503/429/500) 3 martagacha qayta urinadi
+async function callGemini(body) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': API_KEY },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return res.json();
+    const errText = await res.text();
+    if ([429, 500, 503].includes(res.status) && attempt < 3) {
+      await new Promise((r) => setTimeout(r, attempt * 1500));
+      continue;
+    }
+    throw new Error(`${res.status} ${errText}`);
+  }
+}
+
 async function askAI(chatId, text) {
   const h = [...(history.get(chatId) || [])];
   h.push({ role: 'user', parts: [{ text }] });
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': API_KEY },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM }] },
-        contents: h,
-      }),
-    }
-  );
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-
-  const data = await res.json();
+  const data = await callGemini({
+    systemInstruction: { parts: [{ text: SYSTEM }] },
+    contents: h,
+  });
   const answer = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
   if (!answer) throw new Error("Bo'sh javob: " + JSON.stringify(data).slice(0, 300));
 
@@ -68,7 +77,7 @@ bot.on('message:text', async (ctx) => {
   ctx.replyWithChatAction('typing').catch(() => {});
 
   try {
-    const answer = await askAI(id, ctx.message.text);
+    const answer = await askAI(id, ctx.msg.text);
     await sendLong(ctx, answer);
   } catch (e) {
     console.error(e.message);
@@ -104,7 +113,7 @@ bot.on('business_message:text', async (ctx) => {
   ctx.replyWithChatAction('typing').catch(() => {});
 
   try {
-    const answer = await askAI(id, ctx.message.text);
+    const answer = await askAI(id, ctx.msg.text);
     await sendLong(ctx, answer);
   } catch (e) {
     console.error(e.message);
