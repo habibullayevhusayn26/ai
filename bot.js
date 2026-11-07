@@ -5,9 +5,14 @@ const API_KEY = process.env.GEMINI_API_KEY;
 const MODEL = process.env.AI_MODEL || 'gemini-flash-latest';
 
 const SYSTEM =
-  "Sening isming Nova. Sen Husayn yaratgan Telegram AI yordamchisan. " +
-  "Isming yoki kim yaratgani so'ralsa, shunday javob ber. O'zingni Gemini yoki Google modeli deb tanishtirma. " +
-  "Foydalanuvchi qaysi tilda yozsa, shu tilda (asosan o'zbek tilida) qisqa va aniq javob ber.";
+  "Sen Husayn nomidan mijozlarga javob beradigan AI yordamchisan. Husayn Telegram emojilar, saytlar, " +
+  "Telegram botlar va foto xizmatlarini ko'rsatadi. " +
+  "Ism so'ralsa: egasining ismi Husayn ekanini va sen uning AI yordamchisi ekaningni ayt. " +
+  "Telefon raqami so'ralsa: 90 848 17 28. " +
+  "Xizmatlari so'ralsa: Telegram kanali @projects_28. " +
+  "Sayti so'ralsa: habibullayev.uz. " +
+  "Bu ma'lumotlarni faqat so'ralganda ber. Narx va muddatni o'zing o'ylab topma, buni Husayn o'zi aytishini ayt. " +
+  "Foydalanuvchi qaysi tilda yozsa, shu tilda (asosan o'zbek tilida) qisqa, muloyim va aniq javob ber.";
 
 const MAX_HISTORY = 12; // oxirgi nechta xabar eslab qolinadi
 const history = new Map(); // chatId -> xabarlar
@@ -74,6 +79,40 @@ bot.on('message:text', async (ctx) => {
   }
 });
 
+// Telegram Business: mijozlar yozgan xabarlarga akkaunt egasi nomidan javob
+const owners = new Map(); // connectionId -> akkaunt egasi ID si
+async function ownerOf(ctx) {
+  const cid = ctx.businessConnectionId;
+  if (!owners.has(cid)) {
+    const conn = await ctx.api.getBusinessConnection(cid);
+    owners.set(cid, conn.user.id);
+  }
+  return owners.get(cid);
+}
+
+bot.on('business_message:text', async (ctx) => {
+  try {
+    if (ctx.from.id === (await ownerOf(ctx))) return; // egasi o'zi yozgan xabarga javob bermaymiz
+  } catch (e) {
+    console.error('Business connection xatosi:', e.message);
+    return;
+  }
+
+  const id = 'b' + ctx.chat.id;
+  if (busy.has(id)) return;
+  busy.add(id);
+  ctx.replyWithChatAction('typing').catch(() => {});
+
+  try {
+    const answer = await askAI(id, ctx.message.text);
+    await sendLong(ctx, answer);
+  } catch (e) {
+    console.error(e.message);
+  } finally {
+    busy.delete(id);
+  }
+});
+
 bot.on('message', (ctx) => ctx.reply('Hozircha faqat matnli xabarlarga javob bera olaman.'));
 
 // Render uchun: web service port ochib turishi kerak
@@ -82,5 +121,7 @@ require('node:http')
   .listen(process.env.PORT || 3000);
 
 bot.catch((err) => console.error('Bot xatosi:', err.message));
-bot.start();
+bot.start({
+  allowed_updates: ['message', 'business_connection', 'business_message', 'edited_business_message'],
+});
 console.log('AI bot ishga tushdi');
